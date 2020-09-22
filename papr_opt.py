@@ -2,6 +2,7 @@ import numpy as np
 import itertools
 import matplotlib.pyplot as plt
 import scipy as sp
+from scipy.optimize import linear_sum_assignment
 
 class struct():
     pass
@@ -220,7 +221,137 @@ def getOptMap(message, B):
     print('The papr value is ' + str(papr_min))
     return Ropt, complex_nums_opt, corresposing_bits_opt
 
+
+def getCombiNeighbours(combi):
+    """
+    This function gets all the neighbours of a combination/partition,
+    which are defined as combinations/partitions which differ by a
+    transposition.
+    :param combi: A given combination,
+    :return: A list of neighbours.
+    """
+    result = []
+    subset_combinations = list(itertools.combinations(np.linspace(0,len(combi)-1,len(combi)).astype(int),2))
+
+    for k in range(len(subset_combinations)):
+        subset_id1 = subset_combinations[k][0]
+        subset_id2 = subset_combinations[k][1]
+
+        combi_tmp = [list(t) for t in combi]
+        tmp = combi_tmp[subset_id1][0]
+        combi_tmp[subset_id1][0] = combi_tmp[subset_id2][0]
+        combi_tmp[subset_id2][0] = tmp
+        result = result + [[set(t) for t in combi_tmp]]
+
+        combi_tmp = [list(t) for t in combi]
+        tmp = combi_tmp[subset_id1][1]
+        combi_tmp[subset_id1][1] = combi_tmp[subset_id2][0]
+        combi_tmp[subset_id2][0] = tmp
+        result = result + [[set(t) for t in combi_tmp]]
+
+        combi_tmp = [list(t) for t in combi]
+        tmp = combi_tmp[subset_id1][0]
+        combi_tmp[subset_id1][0] = combi_tmp[subset_id2][1]
+        combi_tmp[subset_id2][1] = tmp
+        result = result + [[set(t) for t in combi_tmp]]
+
+        combi_tmp = [list(t) for t in combi]
+        tmp = combi_tmp[subset_id1][1]
+        combi_tmp[subset_id1][1] = combi_tmp[subset_id2][1]
+        combi_tmp[subset_id2][1] = tmp
+        result = result + [[set(t) for t in combi_tmp]]
+
+    return result
+
+def getBasicNumNeighbours(basic_map_num):
+    """
+    This function determines the neighbours of a basic map number
+    choice, where neighbours are defined as basic map configs which
+    differ in the choice at one position/heirarchy.
+    :param basic_map_num: The choice of basic maps.
+    :return: A list of all its neighbours.
+    """
+    result = []
+    for k in range(len(basic_map_num)):
+        for l in range(8):
+            tmp = list(basic_map_num)
+            if(l==basic_map_num[k]):
+                continue
+            else:
+                tmp[k] = l
+                result = result + [tmp]
+
+    return result
+
+def getRandomCombi(B):
+    """
+    Generate a random combination.
+    :param B: 2^B QAM configuration.
+    :return: A random combination (as a list of sets, or a partition).
+    """
+    permutation = np.random.permutation(B)
+    tmp = []
+    for k in range(int(B / 2)):
+        tmp = tmp + [set([permutation[2 * k], permutation[2 * k + 1]])]
+
+    return tmp
+
+def getRandomBasicMapNum(B):
+    """
+    This function generates a random choice for the basic maps at
+    various positions of the heirarchy.
+    :param B: 2^B QAM configuration.
+    :return: A list of the choices for the basic map numbers.
+    """
+    return np.random.randint(0,8,int(B/2))
+
+def localSearch(message, B):
+    """
+    This function performs the local search to find a map which minimizes
+    (suboptimally) the PAPR for a given message under 2^B QAM configuration. Note
+    that this begins at a random initial point.
+    :param message: A string of 0'1 and 1's. Its length must be an integer
+    multiple of B.
+    :param B: 2^B QAM configuration.
+    :return: The map (as the combination and the choice of basic maps), and the PAPR.
+    """
+    basic_map_num = getRandomBasicMapNum(B)
+    combi = getRandomCombi(B)
+
+    Rfinal, complex_nums, corresposing_bits = getMap(B, basic_map_num, combi)
+    papr = papr_calc(message, B, complex_nums, corresposing_bits)
+
+    while(True):
+        flag = 0
+        BasicNumNeighbours = getBasicNumNeighbours(basic_map_num)
+        CombiNeighbours = getCombiNeighbours(combi)
+        for basic_map_num_new in BasicNumNeighbours:
+            for combi_new in CombiNeighbours:
+                if(getDistBetweenCombinations(combi, combi_new)==2):
+                    Rfinal, complex_nums, corresposing_bits = getMap(B, basic_map_num, combi_new)
+                    papr_min_tmp = papr_calc(message, B, complex_nums, corresposing_bits)
+
+                    if(papr_min_tmp<papr):
+                        new_config = [basic_map_num_new, combi_new]
+                        papr = papr_min_tmp
+                        flag = 1
+
+        if(flag==1):
+            basic_map_num = new_config[0]
+            combi = new_config[1]
+        else:
+            break
+
+    print('The basic map numbers must be ' + str(basic_map_num))
+    print('The combinations must be ' + str(combi))
+    print('The resulting PAPR will be ' + str(papr))
+
+    return basic_map_num, combi, papr
+
 if(__name__=='__main__'):
-    B = 4
+    B = 8
     message = np.random.randint(0, 2, B * 100)
-    getOptMap(message, B)
+    if(B<=6):
+        getOptMap(message, B)
+    else:
+        localSearch(message)
