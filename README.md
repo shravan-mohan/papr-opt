@@ -1,5 +1,5 @@
 # Optimal constellation map for minimum PAPR 
-This function searches (brute search) for the optimal Gray coded map resulting in least PAPR.
+This function searches (brute search and local search) for the optimal Gray coded map resulting in least PAPR.
 
 # Packages
 1. Numpy
